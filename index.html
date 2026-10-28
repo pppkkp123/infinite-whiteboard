@@ -64,12 +64,29 @@
       cursor: crosshair;
     }
 
+    #board.brush-mode {
+      cursor: none;
+    }
+
     #board.panning {
       cursor: grab;
     }
 
     #board.dragging-pan {
       cursor: grabbing;
+    }
+
+    #brushCursor {
+      position: fixed;
+      pointer-events: none;
+      border-radius: 50%;
+      box-sizing: border-box;
+      border: 1px solid rgba(23, 32, 51, 0.75);
+      box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.85);
+      transform: translate(-50%, -50%);
+      display: none;
+      z-index: 8;
+      will-change: left, top, width, height;
     }
 
     #toolbar {
@@ -218,6 +235,42 @@
       accent-color: var(--accent);
     }
 
+    .font-control,
+    .font-size-control {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      height: 38px;
+      padding: 0 8px;
+      border: 1px solid rgba(38, 56, 79, 0.14);
+      border-radius: 7px;
+      background: #fff;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .font-control select {
+      max-width: 150px;
+      height: 28px;
+      border: 0;
+      outline: 0;
+      background: transparent;
+      color: var(--ink);
+      cursor: pointer;
+    }
+
+    .font-size-control input {
+      width: 92px;
+      accent-color: var(--accent);
+    }
+
+    #fontSizeValue {
+      min-width: 40px;
+      color: var(--ink);
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
     #widthValue {
       min-width: 34px;
       color: var(--ink);
@@ -276,6 +329,26 @@
       font: 15px/1.35 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       resize: none;
       box-shadow: inset 0 0 0 1px rgba(23, 32, 51, 0.08);
+      -webkit-user-select: text;
+      user-select: text;
+    }
+
+    #textEditor {
+      position: fixed;
+      z-index: 9;
+      display: none;
+      min-width: 80px;
+      min-height: 44px;
+      padding: 6px;
+      border: 1px dashed rgba(15, 139, 141, 0.8);
+      border-radius: 4px;
+      outline: 2px solid rgba(15, 139, 141, 0.2);
+      background: rgba(255, 255, 255, 0.82);
+      resize: none;
+      overflow: hidden;
+      line-height: 1.35;
+      -webkit-user-select: text;
+      user-select: text;
     }
 
     @media (max-width: 720px) {
@@ -300,22 +373,24 @@
 <body>
   <main id="app" aria-label="無邊際白板">
     <canvas id="board"></canvas>
+    <div id="brushCursor" aria-hidden="true"></div>
 
     <div id="toolbar" role="toolbar" aria-label="白板工具列">
       <div class="tool-group" aria-label="繪圖工具">
         <button class="icon-button active" type="button" data-tool="pen" title="筆刷" aria-label="筆刷">✎</button>
         <button class="icon-button" type="button" data-tool="eraser" title="橡皮擦" aria-label="橡皮擦">⌫</button>
         <button class="icon-button" type="button" data-tool="strokeEraser" title="筆畫橡皮擦" aria-label="筆畫橡皮擦">⌧</button>
-        <button class="icon-button" type="button" data-tool="select" title="選擇筆畫" aria-label="選擇筆畫">☝</button>
+        <button class="icon-button" type="button" data-tool="select" title="選擇／框選物件（拖曳空白處框選，Shift 可加選）" aria-label="選擇／框選物件">☝</button>
         <button class="icon-button" type="button" data-tool="pan" title="平移" aria-label="平移">↔</button>
         <button class="icon-button" type="button" data-tool="line" title="直線" aria-label="直線">╱</button>
         <button class="icon-button" type="button" data-tool="rect" title="長方形" aria-label="長方形">□</button>
         <button class="icon-button" type="button" data-tool="circle" title="圓形" aria-label="圓形">○</button>
         <button class="icon-button" type="button" data-tool="ellipse" title="橢圓形" aria-label="橢圓形">◯</button>
+        <button class="icon-button" type="button" data-tool="text" title="文字方塊" aria-label="文字方塊">T</button>
       </div>
 
-      <div class="tool-group" aria-label="筆觸設定">
-        <input class="color-control" id="colorPicker" type="color" value="#172033" title="顏色" aria-label="顏色">
+      <div class="tool-group" aria-label="筆觸與文字設定">
+        <input class="color-control" id="colorPicker" type="color" value="#172033" title="筆觸／文字顏色" aria-label="筆觸／文字顏色">
         <div class="swatch-row" aria-label="快速顏色">
           <button class="color-swatch active" type="button" data-color="#172033" style="--swatch-color: #172033" title="黑色" aria-label="黑色"></button>
           <button class="color-swatch" type="button" data-color="#1d4ed8" style="--swatch-color: #1d4ed8" title="藍色" aria-label="藍色"></button>
@@ -327,6 +402,21 @@
           粗細
           <input id="widthSlider" type="range" min="1" max="60" value="4" aria-label="粗細">
           <span id="widthValue">4px</span>
+        </label>
+        <label class="font-control" title="字型">
+          字型
+          <select id="fontFamilySelect" aria-label="字型">
+            <option value="system-ui, sans-serif">系統 sans-serif</option>
+            <option value="'Microsoft JhengHei', sans-serif">微軟正黑體</option>
+            <option value="'Noto Sans TC', sans-serif">Noto Sans TC</option>
+            <option value="serif">襯線字型</option>
+            <option value="monospace">等寬字型</option>
+          </select>
+        </label>
+        <label class="font-size-control" title="文字大小">
+          文字
+          <input id="fontSizeSlider" type="range" min="10" max="96" value="24" aria-label="文字大小">
+          <span id="fontSizeValue">24px</span>
         </label>
         <button class="icon-button active" id="smoothToggleBtn" type="button" title="筆跡平滑" aria-label="筆跡平滑" aria-pressed="true">≈</button>
       </div>
@@ -340,6 +430,7 @@
           <button class="color-swatch" type="button" data-sticky-color="#bfdbfe" style="--swatch-color: #bfdbfe" title="粉藍色便條" aria-label="粉藍色便條"></button>
         </div>
         <button class="icon-button" id="undoBtn" type="button" title="返回上一步" aria-label="返回上一步" disabled>↶</button>
+        <button class="icon-button" id="redoBtn" type="button" title="回到下一步" aria-label="回到下一步" disabled>↷</button>
         <button class="icon-button danger" id="deleteSelectedBtn" type="button" title="刪除所選" aria-label="刪除所選" disabled>⌦</button>
         <button class="icon-button danger" id="clearBtn" type="button" title="清除白板" aria-label="清除白板">×</button>
         <button class="icon-button" id="resetViewBtn" type="button" title="回到中心" aria-label="回到中心">⌂</button>
@@ -355,6 +446,7 @@
 
     <div id="status" role="status" aria-live="polite"></div>
     <textarea id="stickyEditor" aria-label="便條內容"></textarea>
+    <textarea id="textEditor" aria-label="文字方塊內容"></textarea>
     <input type="file" id="importJsonInput" accept="application/json" hidden>
   </main>
 
@@ -365,10 +457,14 @@
     const colorPicker = document.getElementById("colorPicker");
     const widthSlider = document.getElementById("widthSlider");
     const widthValue = document.getElementById("widthValue");
+    const fontFamilySelect = document.getElementById("fontFamilySelect");
+    const fontSizeSlider = document.getElementById("fontSizeSlider");
+    const fontSizeValue = document.getElementById("fontSizeValue");
     const smoothToggleBtn = document.getElementById("smoothToggleBtn");
     const zoomLabel = document.getElementById("zoomLabel");
     const addStickyBtn = document.getElementById("addStickyBtn");
     const undoBtn = document.getElementById("undoBtn");
+    const redoBtn = document.getElementById("redoBtn");
     const deleteSelectedBtn = document.getElementById("deleteSelectedBtn");
     const clearBtn = document.getElementById("clearBtn");
     const resetViewBtn = document.getElementById("resetViewBtn");
@@ -378,6 +474,8 @@
     const importJsonInput = document.getElementById("importJsonInput");
     const statusBox = document.getElementById("status");
     const stickyEditor = document.getElementById("stickyEditor");
+    const textEditor = document.getElementById("textEditor");
+    const brushCursor = document.getElementById("brushCursor");
 
     const MIN_ZOOM = 0.1;
     const MAX_ZOOM = 5;
@@ -386,11 +484,16 @@
     const STROKE_ERASER_TOLERANCE = 8;
     const DEFAULT_STICKY_COLOR = "#fef08a";
     const DEFAULT_STICKY_SIZE = 200;
+    const DEFAULT_TEXT_FONT = "system-ui, sans-serif";
+    const DEFAULT_TEXT_SIZE = 24;
+    const DEFAULT_TEXT_WIDTH = 320;
+    const DEFAULT_TEXT_HEIGHT = 120;
     const MIN_STICKY_SIZE = 60;
     const MAX_STICKY_SIZE = 800;
     const STICKY_CONTROL_SIZE = 22;
     const STICKY_CONTROL_GAP = 4;
     const STICKY_RESIZE_HANDLE_SIZE = 16;
+    const STICKY_LIFTED_ALPHA = 0.14;
     const AUTOSAVE_KEY = "infinite-whiteboard.autosave.v1";
     const AUTOSAVE_DELAY = 250;
     const PINCH_ZOOM_DEADZONE = 0.015;
@@ -416,6 +519,11 @@
     let selectionStartWorld = null;
     let selectionOriginalStroke = null;
     let selectionMoved = false;
+    let selectionAlreadySelected = false;
+    let multiSelectedIds = [];
+    let selectionOriginals = new Map();
+    let marquee = null;
+    let marqueeBaseIds = [];
     let stickyResizePointerId = null;
     let stickyResizeNoteId = null;
     let stickyResizeStartWorld = null;
@@ -423,6 +531,8 @@
     let stickyResizeChanged = false;
     let editingStickyId = null;
     let editingStickyOriginal = null;
+    let editingTextId = null;
+    let editingTextOriginal = null;
     let erasedStrokeIds = new Set();
     let currentStroke = null;
     let previewShape = null;
@@ -431,6 +541,9 @@
     let panPointerId = null;
     let lastPanPoint = null;
     let pinchState = null;
+    let cursorX = -1000;
+    let cursorY = -1000;
+    let isCursorInside = false;
     let statusTimer = 0;
     let autosaveTimer = 0;
     let redrawQueued = false;
@@ -581,13 +694,47 @@
         layerCtx.restore();
 
         for (const stroke of strokes) {
-          drawStroke(layerCtx, stroke);
+          drawStrokeWithErasers(layerCtx, stroke);
         }
 
         layerDirty = false;
       }
 
       ctx.drawImage(layerCanvas, 0, 0, cssWidth(), cssHeight());
+    }
+
+    let eraseTempCanvas = null;
+    let eraseTempCtx = null;
+
+    function drawStrokeWithErasers(targetCtx, stroke) {
+      if (!stroke || stroke.type === "sticky" || !Array.isArray(stroke.erasers) || stroke.erasers.length === 0) {
+        drawStroke(targetCtx, stroke);
+        return;
+      }
+
+      const dpr = window.devicePixelRatio || 1;
+      const width = Math.max(1, cssWidth());
+      const height = Math.max(1, cssHeight());
+
+      if (!eraseTempCanvas) {
+        eraseTempCanvas = document.createElement("canvas");
+        eraseTempCtx = eraseTempCanvas.getContext("2d");
+      }
+      if (eraseTempCanvas.width !== Math.round(width * dpr) || eraseTempCanvas.height !== Math.round(height * dpr)) {
+        eraseTempCanvas.width = Math.round(width * dpr);
+        eraseTempCanvas.height = Math.round(height * dpr);
+      }
+
+      eraseTempCtx.setTransform(1, 0, 0, 1, 0, 0);
+      eraseTempCtx.clearRect(0, 0, eraseTempCanvas.width, eraseTempCanvas.height);
+      eraseTempCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      drawStroke(eraseTempCtx, stroke);
+      for (const eraser of stroke.erasers) {
+        drawFreehand(eraseTempCtx, { type: "eraser", points: eraser.points, width: eraser.width });
+      }
+
+      targetCtx.drawImage(eraseTempCanvas, 0, 0, width, height);
     }
 
     function drawStroke(targetCtx, stroke) {
@@ -600,6 +747,11 @@
 
       if (stroke.type === "sticky") {
         drawStickyNote(targetCtx, stroke);
+        return;
+      }
+
+      if (stroke.type === "text") {
+        drawTextBox(targetCtx, stroke);
         return;
       }
 
@@ -687,12 +839,18 @@
       const width = Math.max(1, note.noteWidth * viewport.zoom);
       const height = Math.max(1, note.noteHeight * viewport.zoom);
       const radius = Math.min(8, Math.max(3, 6 * viewport.zoom));
+      const lifted = isStickyLifted(note);
 
       targetCtx.save();
       targetCtx.globalCompositeOperation = "source-over";
-      targetCtx.shadowColor = "rgba(33, 44, 62, 0.18)";
-      targetCtx.shadowBlur = Math.min(18, 10 * viewport.zoom);
-      targetCtx.shadowOffsetY = Math.min(8, 4 * viewport.zoom);
+
+      if (!lifted) {
+        targetCtx.shadowColor = "rgba(33, 44, 62, 0.18)";
+        targetCtx.shadowBlur = Math.min(18, 10 * viewport.zoom);
+        targetCtx.shadowOffsetY = Math.min(8, 4 * viewport.zoom);
+      }
+
+      targetCtx.globalAlpha = lifted ? STICKY_LIFTED_ALPHA : 1;
       targetCtx.fillStyle = note.color || "#fef08a";
       targetCtx.strokeStyle = "rgba(115, 88, 15, 0.22)";
       targetCtx.lineWidth = 1;
@@ -706,7 +864,15 @@
 
       targetCtx.fill();
       targetCtx.shadowColor = "transparent";
+      targetCtx.globalAlpha = 1;
+
+      if (lifted) {
+        targetCtx.setLineDash([7, 6]);
+        targetCtx.strokeStyle = "rgba(15, 139, 141, 0.72)";
+      }
+
       targetCtx.stroke();
+      targetCtx.setLineDash([]);
 
       drawStickyText(targetCtx, note, topLeft, width, height);
       drawStickyControls(targetCtx, note, topLeft, width, height);
@@ -726,8 +892,9 @@
       const maxHeight = height - controlsHeight - padding * 1.6;
 
       targetCtx.save();
-      targetCtx.fillStyle = "rgba(23, 32, 51, 0.82)";
-      targetCtx.font = Math.max(11, 15 * viewport.zoom) + "px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+      targetCtx.globalAlpha = isStickyLifted(note) ? 0.45 : 1;
+      targetCtx.fillStyle = note.textColor || "rgba(23, 32, 51, 0.82)";
+      targetCtx.font = Math.max(11, (note.fontSize || 15) * viewport.zoom) + "px " + (note.fontFamily || DEFAULT_TEXT_FONT);
       targetCtx.textBaseline = "top";
 
       if (text.trim()) {
@@ -740,7 +907,42 @@
         }
       } else if (note.id === selectedStrokeId) {
         targetCtx.fillStyle = "rgba(23, 32, 51, 0.34)";
-        targetCtx.fillText("點編輯輸入文字", left, top);
+        targetCtx.fillText("再點一下即可輸入文字", left, top);
+      }
+
+      targetCtx.restore();
+    }
+
+    function drawTextBox(targetCtx, textBox) {
+      if (!isValidTextBox(textBox)) return;
+
+      const topLeft = worldToScreen(textBox.x, textBox.y);
+      const width = Math.max(1, textBox.width * viewport.zoom);
+      const height = Math.max(1, textBox.height * viewport.zoom);
+      const padding = Math.max(6, 8 * viewport.zoom);
+
+      targetCtx.save();
+      targetCtx.globalCompositeOperation = "source-over";
+      targetCtx.fillStyle = textBox.color || "#172033";
+      targetCtx.font = Math.max(10, (textBox.fontSize || DEFAULT_TEXT_SIZE) * viewport.zoom) + "px " + (textBox.fontFamily || DEFAULT_TEXT_FONT);
+      targetCtx.textBaseline = "top";
+
+      if (editingTextId !== textBox.id) {
+        const text = textBox.text || "";
+        const maxWidth = width - padding * 2;
+        const lines = text.trim() ? wrapText(targetCtx, text, maxWidth) : [];
+        const lineHeight = Math.max(14, (textBox.fontSize || DEFAULT_TEXT_SIZE) * 1.35 * viewport.zoom);
+
+        for (let i = 0; i < lines.length; i += 1) {
+          const y = topLeft.y + padding + i * lineHeight;
+          if (y + lineHeight > topLeft.y + height - padding) break;
+          targetCtx.fillText(lines[i], topLeft.x + padding, y);
+        }
+
+        if (!text.trim() && textBox.id === selectedStrokeId) {
+          targetCtx.fillStyle = "rgba(23, 32, 51, 0.36)";
+          targetCtx.fillText("點一下輸入文字", topLeft.x + padding, topLeft.y + padding);
+        }
       }
 
       targetCtx.restore();
@@ -772,11 +974,10 @@
       const controls = getStickyControlRects(note);
 
       for (const control of controls.buttons) {
-        const isConfirm = control.action === "confirm";
-        const isDisabled = isConfirm && editingStickyId !== note.id;
         targetCtx.save();
-        targetCtx.fillStyle = isDisabled ? "rgba(255, 255, 255, 0.5)" : "rgba(255, 255, 255, 0.9)";
-        targetCtx.strokeStyle = isDisabled ? "rgba(23, 32, 51, 0.12)" : "rgba(23, 32, 51, 0.24)";
+        targetCtx.globalAlpha = 1;
+        targetCtx.fillStyle = "rgba(255, 255, 255, 0.9)";
+        targetCtx.strokeStyle = "rgba(23, 32, 51, 0.24)";
         targetCtx.lineWidth = 1;
         targetCtx.beginPath();
         if (typeof targetCtx.roundRect === "function") {
@@ -786,7 +987,7 @@
         }
         targetCtx.fill();
         targetCtx.stroke();
-        targetCtx.fillStyle = isDisabled ? "rgba(23, 32, 51, 0.3)" : control.color;
+        targetCtx.fillStyle = control.color;
         targetCtx.font = "bold 14px ui-sans-serif, system-ui, sans-serif";
         targetCtx.textAlign = "center";
         targetCtx.textBaseline = "middle";
@@ -816,10 +1017,15 @@
       const gap = STICKY_CONTROL_GAP;
       const top = topLeft.y + gap;
       const right = topLeft.x + width - gap;
+      const lifted = isStickyLifted(note);
       const actions = [
-        { action: "confirm", label: "✓", color: "#15803d" },
-        { action: "edit", label: "✎", color: "#0f8b8d" },
-        { action: "delete", label: "×", color: "#b42318" }
+        {
+          action: "lift",
+          label: lifted ? "蓋" : "掀",
+          color: lifted ? "#b42318" : "#0f8b8d",
+          title: lifted ? "蓋回便條" : "掀開便條"
+        },
+        { action: "delete", label: "×", color: "#b42318", title: "刪除便條" }
       ];
 
       return {
@@ -883,9 +1089,19 @@
     }
 
     function drawSelectionBox() {
-      if (activeTool !== "select" || !selectedStrokeId) return;
+      if (activeTool !== "select") return;
 
-      const stroke = findStrokeById(selectedStrokeId);
+      drawMarquee();
+
+      const ids = getSelectedIds();
+      if (ids.length === 0) return;
+
+      if (ids.length > 1) {
+        drawMultiSelectionBox(ids);
+        return;
+      }
+
+      const stroke = findStrokeById(ids[0]);
       const bounds = getStrokeBounds(stroke);
       if (!bounds) return;
 
@@ -921,6 +1137,76 @@
       ctx.restore();
     }
 
+    function drawMultiSelectionBox(ids) {
+      let minX = Infinity;
+      let minY = Infinity;
+      let maxX = -Infinity;
+      let maxY = -Infinity;
+
+      ctx.save();
+      ctx.strokeStyle = "rgba(15, 139, 141, 0.55)";
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+
+      for (const id of ids) {
+        const stroke = findStrokeById(id);
+        const bounds = getStrokeBounds(stroke);
+        if (!bounds) continue;
+
+        const pad = Math.max(4, (stroke.width || 1) * viewport.zoom / 2 + 3);
+        const a = worldToScreen(bounds.minX, bounds.minY);
+        const b = worldToScreen(bounds.maxX, bounds.maxY);
+        const left = Math.min(a.x, b.x) - pad;
+        const top = Math.min(a.y, b.y) - pad;
+        const right = Math.max(a.x, b.x) + pad;
+        const bottom = Math.max(a.y, b.y) + pad;
+        ctx.strokeRect(left, top, right - left, bottom - top);
+
+        minX = Math.min(minX, left);
+        minY = Math.min(minY, top);
+        maxX = Math.max(maxX, right);
+        maxY = Math.max(maxY, bottom);
+      }
+
+      if (Number.isFinite(minX)) {
+        ctx.strokeStyle = "#0f8b8d";
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([8, 5]);
+        ctx.strokeRect(minX - 4, minY - 4, maxX - minX + 8, maxY - minY + 8);
+        ctx.setLineDash([]);
+
+        const label = "已選 " + ids.length + " 個";
+        ctx.font = "12px ui-sans-serif, system-ui, sans-serif";
+        const textWidth = ctx.measureText(label).width + 12;
+        ctx.fillStyle = "#0f8b8d";
+        ctx.fillRect(minX - 4, minY - 4 - 20, textWidth, 20);
+        ctx.fillStyle = "#ffffff";
+        ctx.textBaseline = "middle";
+        ctx.fillText(label, minX + 2, minY - 4 - 10);
+      }
+      ctx.restore();
+    }
+
+    function drawMarquee() {
+      if (!marquee) return;
+
+      const a = worldToScreen(marquee.start.x, marquee.start.y);
+      const b = worldToScreen(marquee.end.x, marquee.end.y);
+      const left = Math.min(a.x, b.x);
+      const top = Math.min(a.y, b.y);
+      const width = Math.abs(b.x - a.x);
+      const height = Math.abs(b.y - a.y);
+
+      ctx.save();
+      ctx.fillStyle = "rgba(15, 139, 141, 0.08)";
+      ctx.strokeStyle = "#0f8b8d";
+      ctx.lineWidth = 1;
+      ctx.setLineDash([5, 4]);
+      ctx.fillRect(left, top, width, height);
+      ctx.strokeRect(left + 0.5, top + 0.5, width, height);
+      ctx.restore();
+    }
+
     function redraw() {
       clearCanvas();
       drawGrid();
@@ -930,6 +1216,8 @@
       drawSelectionBox();
       updateZoomLabel();
       updateStickyEditorPosition();
+      updateTextEditorPosition();
+      updateBrushCursor();
     }
 
     function updateZoomLabel() {
@@ -947,6 +1235,24 @@
 
     function updatePanCursor() {
       canvas.classList.toggle("panning", activeTool === "pan" || isSpacePressed);
+      updateBrushCursor();
+    }
+
+    function updateBrushCursor() {
+      const isBrush = (activeTool === "pen" || activeTool === "eraser") && !isSpacePressed && activeTool !== "pan" && !isPanning && !pinchState;
+      canvas.classList.toggle("brush-mode", isBrush);
+
+      if (!isBrush || !isCursorInside) {
+        brushCursor.style.display = "none";
+        return;
+      }
+
+      const size = Math.max(1, (Number(widthSlider.value) || 1) * viewport.zoom);
+      brushCursor.style.width = size + "px";
+      brushCursor.style.height = size + "px";
+      brushCursor.style.left = cursorX + "px";
+      brushCursor.style.top = cursorY + "px";
+      brushCursor.style.display = "block";
     }
 
     function updateActiveSwatch() {
@@ -963,6 +1269,83 @@
       }
     }
 
+    function getSelectedStyledObject() {
+      const ids = getSelectedIds();
+      if (ids.length !== 1) return null;
+      const stroke = findStrokeById(ids[0]);
+      return stroke && (stroke.type === "text" || stroke.type === "sticky") ? stroke : null;
+    }
+
+    function updateSelectedTextStyle(property, value) {
+      const stroke = getSelectedStyledObject();
+      if (!stroke) return false;
+
+      const before = cloneStroke(stroke);
+      if (stroke.type === "sticky" && property === "color") {
+        stroke.textColor = value;
+      } else if (property === "color") {
+        stroke.color = value;
+      } else {
+        stroke[property] = value;
+      }
+
+      const after = cloneStroke(stroke);
+      if (JSON.stringify(before) === JSON.stringify(after)) return false;
+
+      pushUndoAction({
+        type: "update",
+        strokeId: stroke.id,
+        before,
+        after
+      });
+      if (editingTextId === stroke.id) editingTextOriginal = cloneStroke(stroke);
+      if (editingStickyId === stroke.id) editingStickyOriginal = cloneStroke(stroke);
+      markLayerDirty();
+      requestRedraw();
+      scheduleAutosave();
+      return true;
+    }
+
+    function syncTextControlsToSelection() {
+      const stroke = getSelectedStyledObject();
+      if (!stroke) return;
+
+      const color = stroke.type === "sticky" ? stroke.textColor : stroke.color;
+      if (typeof color === "string" && /^#[0-9a-f]{6}$/i.test(color)) {
+        colorPicker.value = color;
+        updateActiveSwatch();
+      }
+      if (typeof stroke.fontFamily === "string" && Array.from(fontFamilySelect.options).some((option) => option.value === stroke.fontFamily)) {
+        fontFamilySelect.value = stroke.fontFamily;
+      }
+      if (Number.isFinite(stroke.fontSize)) {
+        fontSizeSlider.value = String(clamp(stroke.fontSize, Number(fontSizeSlider.min), Number(fontSizeSlider.max)));
+        fontSizeValue.textContent = fontSizeSlider.value + "px";
+      }
+    }
+
+    function updateSelectedStickyBackground(color) {
+      const stroke = getSelectedStyledObject();
+      if (!stroke || stroke.type !== "sticky") return false;
+
+      const before = cloneStroke(stroke);
+      stroke.color = color;
+      const after = cloneStroke(stroke);
+      if (JSON.stringify(before) === JSON.stringify(after)) return false;
+
+      pushUndoAction({
+        type: "update",
+        strokeId: stroke.id,
+        before,
+        after
+      });
+      if (editingStickyId === stroke.id) editingStickyOriginal = cloneStroke(stroke);
+      markLayerDirty();
+      requestRedraw();
+      scheduleAutosave();
+      return true;
+    }
+
     function getSavedBoardData() {
       return {
         version: "1.0",
@@ -975,6 +1358,8 @@
         settings: {
           color: colorPicker.value,
           width: Number(widthSlider.value),
+          fontFamily: fontFamilySelect.value,
+          fontSize: Number(fontSizeSlider.value),
           stickyColor,
           smoothStrokes
         },
@@ -1010,7 +1395,7 @@
         const data = JSON.parse(savedText);
         if (!data || !Array.isArray(data.strokes)) return;
 
-        strokes = data.strokes.filter(isValidStroke).map(cloneStroke);
+        strokes = migrateLegacyErasers(data.strokes.filter(isValidStroke).map(cloneStroke));
         undoStack = [];
         redoStack = [];
         selectedStrokeId = null;
@@ -1029,6 +1414,15 @@
           if (Number.isFinite(data.settings.width)) {
             widthSlider.value = String(clamp(data.settings.width, Number(widthSlider.min), Number(widthSlider.max)));
             widthValue.textContent = widthSlider.value + "px";
+          }
+
+          if (typeof data.settings.fontFamily === "string" && Array.from(fontFamilySelect.options).some((option) => option.value === data.settings.fontFamily)) {
+            fontFamilySelect.value = data.settings.fontFamily;
+          }
+
+          if (Number.isFinite(data.settings.fontSize)) {
+            fontSizeSlider.value = String(clamp(data.settings.fontSize, Number(fontSizeSlider.min), Number(fontSizeSlider.max)));
+            fontSizeValue.textContent = fontSizeSlider.value + "px";
           }
 
           if (typeof data.settings.stickyColor === "string" && /^#[0-9a-f]{6}$/i.test(data.settings.stickyColor)) {
@@ -1082,12 +1476,16 @@
       selectionStartWorld = null;
       selectionOriginalStroke = null;
       selectionMoved = false;
+      selectionAlreadySelected = false;
+      selectionOriginals = new Map();
+      marquee = null;
       erasedStrokeIds.clear();
       currentStroke = null;
       previewShape = null;
     }
 
     function addStickyNote() {
+      confirmTextEdit();
       confirmStickyEdit();
       const center = screenToWorld(cssWidth() / 2, cssHeight() / 2);
       const note = {
@@ -1098,7 +1496,10 @@
         y: center.y - DEFAULT_STICKY_SIZE / 2,
         noteWidth: DEFAULT_STICKY_SIZE,
         noteHeight: DEFAULT_STICKY_SIZE,
-        text: ""
+        text: "",
+        textColor: colorPicker.value,
+        fontFamily: fontFamilySelect.value || DEFAULT_TEXT_FONT,
+        fontSize: Number(fontSizeSlider.value) || 15
       };
 
       strokes.push(note);
@@ -1111,10 +1512,12 @@
       });
       requestRedraw();
       scheduleAutosave();
-      showStatus("已加入 200×200 便條。");
+      startStickyEdit(note);
+      showStatus("已加入 200×200 便條，可直接輸入文字。");
     }
 
     function handleStickyControl(event, control) {
+      multiSelectedIds = [];
       selectedStrokeId = control.note.id;
       updateUndoButton();
 
@@ -1123,17 +1526,8 @@
         return true;
       }
 
-      if (control.action === "edit") {
-        startStickyEdit(control.note);
-        return true;
-      }
-
-      if (control.action === "confirm") {
-        if (editingStickyId === control.note.id) {
-          confirmStickyEdit();
-        } else {
-          showStatus("這張便條尚未進入編輯。");
-        }
+      if (control.action === "lift") {
+        toggleStickyLift(control.note);
         return true;
       }
 
@@ -1145,8 +1539,33 @@
       return false;
     }
 
+    function isStickyLifted(note) {
+      return Boolean(note && note.lifted);
+    }
+
+    function toggleStickyLift(note) {
+      if (!isValidStickyNote(note)) return;
+      confirmStickyEdit();
+
+      const before = cloneStroke(note);
+      note.lifted = !note.lifted;
+      const after = cloneStroke(note);
+
+      pushUndoAction({
+        type: "update",
+        strokeId: note.id,
+        before,
+        after
+      });
+      markLayerDirty();
+      requestRedraw();
+      scheduleAutosave();
+      showStatus(note.lifted ? "已掀開便條，可看見下方圖形。" : "已蓋回便條。");
+    }
+
     function startStickyEdit(note) {
       if (!isValidStickyNote(note)) return;
+      confirmTextEdit();
       confirmStickyEdit();
       editingStickyId = note.id;
       editingStickyOriginal = cloneStroke(note);
@@ -1187,6 +1606,104 @@
       requestRedraw();
     }
 
+    function addTextBoxAt(world) {
+      confirmStickyEdit();
+      confirmTextEdit();
+
+      const textBox = {
+        id: newId("text"),
+        type: "text",
+        x: world.x,
+        y: world.y,
+        width: DEFAULT_TEXT_WIDTH,
+        height: DEFAULT_TEXT_HEIGHT,
+        text: "",
+        color: colorPicker.value,
+        fontFamily: fontFamilySelect.value || DEFAULT_TEXT_FONT,
+        fontSize: Number(fontSizeSlider.value) || DEFAULT_TEXT_SIZE
+      };
+
+      strokes.push(textBox);
+      selectedStrokeId = textBox.id;
+      multiSelectedIds = [];
+      setTool("select");
+      markLayerDirty();
+      pushUndoAction({
+        type: "add",
+        stroke: cloneStroke(textBox)
+      });
+      requestRedraw();
+      scheduleAutosave();
+      startTextEdit(textBox);
+      showStatus("已加入文字方塊，可直接輸入文字。");
+    }
+
+    function startTextEdit(textBox) {
+      if (!isValidTextBox(textBox)) return;
+      confirmStickyEdit();
+      confirmTextEdit();
+      editingTextId = textBox.id;
+      editingTextOriginal = cloneStroke(textBox);
+      textEditor.value = textBox.text || "";
+      textEditor.style.display = "block";
+      updateTextEditorPosition();
+      textEditor.focus();
+      textEditor.select();
+      markLayerDirty();
+      requestRedraw();
+      showStatus("正在編輯文字方塊。");
+    }
+
+    function confirmTextEdit() {
+      if (!editingTextId) return;
+
+      const textBox = findStrokeById(editingTextId);
+      if (textBox && textBox.type === "text") {
+        const before = editingTextOriginal ? cloneStroke(editingTextOriginal) : cloneStroke(textBox);
+        textBox.text = textEditor.value;
+        const after = cloneStroke(textBox);
+        if (JSON.stringify(before) !== JSON.stringify(after)) {
+          pushUndoAction({
+            type: "update",
+            strokeId: textBox.id,
+            before,
+            after
+          });
+          scheduleAutosave();
+        }
+      }
+
+      editingTextId = null;
+      editingTextOriginal = null;
+      textEditor.value = "";
+      textEditor.style.display = "none";
+      markLayerDirty();
+      requestRedraw();
+    }
+
+    function updateTextEditorPosition() {
+      if (!editingTextId) return;
+
+      const textBox = findStrokeById(editingTextId);
+      if (!textBox || textBox.type !== "text") {
+        textEditor.style.display = "none";
+        editingTextId = null;
+        editingTextOriginal = null;
+        return;
+      }
+
+      const topLeft = worldToScreen(textBox.x, textBox.y);
+      const padding = Math.max(4, 6 * viewport.zoom);
+      textEditor.style.left = topLeft.x + "px";
+      textEditor.style.top = topLeft.y + "px";
+      textEditor.style.width = Math.max(80, textBox.width * viewport.zoom) + "px";
+      textEditor.style.height = Math.max(44, textBox.height * viewport.zoom) + "px";
+      textEditor.style.padding = padding + "px";
+      textEditor.style.color = textBox.color || "#172033";
+      textEditor.style.fontFamily = textBox.fontFamily || DEFAULT_TEXT_FONT;
+      textEditor.style.fontSize = Math.max(10, (textBox.fontSize || DEFAULT_TEXT_SIZE) * viewport.zoom) + "px";
+    }
+
     function updateStickyEditorPosition() {
       if (!editingStickyId) return;
 
@@ -1208,7 +1725,9 @@
       stickyEditor.style.width = Math.max(48, width - padding * 2) + "px";
       stickyEditor.style.height = Math.max(32, height - topOffset - padding) + "px";
       stickyEditor.style.backgroundColor = note.color || "#fef08a";
-      stickyEditor.style.fontSize = Math.max(11, 15 * viewport.zoom) + "px";
+      stickyEditor.style.color = note.textColor || "#172033";
+      stickyEditor.style.fontFamily = note.fontFamily || DEFAULT_TEXT_FONT;
+      stickyEditor.style.fontSize = Math.max(11, (note.fontSize || 15) * viewport.zoom) + "px";
     }
 
     function beginStickyResize(event, note) {
@@ -1262,65 +1781,244 @@
       requestRedraw();
     }
 
+    function setSelection(ids) {
+      multiSelectedIds = ids.length > 1 ? ids.slice() : [];
+      selectedStrokeId = ids.length > 0 ? ids[ids.length - 1] : null;
+      const selected = selectedStrokeId ? findStrokeById(selectedStrokeId) : null;
+      if (selected && selected.type === "sticky" && typeof selected.color === "string") {
+        stickyColor = selected.color;
+        updateActiveStickySwatch();
+      }
+      syncTextControlsToSelection();
+    }
+
+    function getSelectedIds() {
+      if (multiSelectedIds.length > 1 && multiSelectedIds.includes(selectedStrokeId)) {
+        const ids = multiSelectedIds.filter((id) => findStrokeById(id));
+        if (ids.length > 0) return ids;
+      }
+      return selectedStrokeId && findStrokeById(selectedStrokeId) ? [selectedStrokeId] : [];
+    }
+
+    function isPointInSelectionGroup(world, ids) {
+      let minX = Infinity;
+      let minY = Infinity;
+      let maxX = -Infinity;
+      let maxY = -Infinity;
+
+      for (const id of ids) {
+        const stroke = findStrokeById(id);
+        const bounds = getStrokeBounds(stroke);
+        if (!bounds) continue;
+
+        const pad = (stroke.width || 0) / 2;
+        minX = Math.min(minX, bounds.minX - pad);
+        minY = Math.min(minY, bounds.minY - pad);
+        maxX = Math.max(maxX, bounds.maxX + pad);
+        maxY = Math.max(maxY, bounds.maxY + pad);
+      }
+
+      if (!Number.isFinite(minX)) return false;
+
+      const margin = 12 / viewport.zoom;
+      return world.x >= minX - margin
+        && world.x <= maxX + margin
+        && world.y >= minY - margin
+        && world.y <= maxY + margin;
+    }
+
     function beginSelection(event, world) {
+      confirmTextEdit();
       confirmStickyEdit();
       selectionPointerId = event.pointerId;
       selectionStartWorld = world;
       selectionMoved = false;
+      selectionAlreadySelected = false;
+      selectionOriginals = new Map();
+      marquee = null;
 
+      const additive = event.shiftKey;
+      const currentIds = getSelectedIds();
       const hit = findStrokeAt(world);
+
+      if (!additive && currentIds.length > 1
+        && ((hit && currentIds.includes(hit.stroke.id)) || isPointInSelectionGroup(world, currentIds))) {
+        for (const id of currentIds) {
+          const stroke = findStrokeById(id);
+          if (stroke) selectionOriginals.set(id, cloneStroke(stroke));
+        }
+        updateUndoButton();
+        requestRedraw();
+        return;
+      }
+
       if (!hit) {
-        selectedStrokeId = null;
-        selectionOriginalStroke = null;
+        marqueeBaseIds = additive ? currentIds : [];
+        if (!additive) setSelection([]);
+        marquee = { start: world, end: world };
         updateUndoButton();
         markLayerDirty();
         requestRedraw();
         return;
       }
 
-      selectedStrokeId = hit.stroke.id;
-      selectionOriginalStroke = cloneStroke(hit.stroke);
+      if (additive) {
+        const id = hit.stroke.id;
+        setSelection(currentIds.includes(id) ? currentIds.filter((x) => x !== id) : [...currentIds, id]);
+        selectionPointerId = null;
+        updateUndoButton();
+        markLayerDirty();
+        requestRedraw();
+        return;
+      }
+
+      if (currentIds.length > 1 && currentIds.includes(hit.stroke.id)) {
+        for (const id of currentIds) {
+          const stroke = findStrokeById(id);
+          if (stroke) selectionOriginals.set(id, cloneStroke(stroke));
+        }
+      } else {
+        selectionAlreadySelected = currentIds.length === 1 && currentIds[0] === hit.stroke.id;
+        setSelection([hit.stroke.id]);
+        selectionOriginals.set(hit.stroke.id, cloneStroke(hit.stroke));
+      }
+
       updateUndoButton();
       markLayerDirty();
       requestRedraw();
     }
 
     function continueSelection(world, pointerId) {
-      if (selectionPointerId !== pointerId || !selectedStrokeId || !selectionOriginalStroke || !selectionStartWorld) return;
+      if (selectionPointerId !== pointerId) return;
+
+      if (marquee) {
+        marquee.end = world;
+        requestRedraw();
+        return;
+      }
+
+      if (selectionOriginals.size === 0 || !selectionStartWorld) return;
 
       const deltaX = world.x - selectionStartWorld.x;
       const deltaY = world.y - selectionStartWorld.y;
       const moved = Math.hypot(deltaX, deltaY) >= MIN_POINT_DISTANCE / viewport.zoom;
       if (!moved && !selectionMoved) return;
 
-      const movedStroke = cloneStroke(selectionOriginalStroke);
-      translateStroke(movedStroke, deltaX, deltaY);
+      let changed = false;
+      for (const [id, original] of selectionOriginals) {
+        const movedStroke = cloneStroke(original);
+        translateStroke(movedStroke, deltaX, deltaY);
+        if (replaceStrokeById(id, movedStroke)) changed = true;
+      }
 
-      if (replaceStrokeById(selectedStrokeId, movedStroke)) {
+      if (changed) {
         selectionMoved = true;
         markLayerDirty();
         requestRedraw();
       }
     }
 
+    function finishMarquee(event) {
+      const point = getCanvasPoint(event);
+      marquee.end = screenToWorld(point.x, point.y);
+
+      const minX = Math.min(marquee.start.x, marquee.end.x);
+      const maxX = Math.max(marquee.start.x, marquee.end.x);
+      const minY = Math.min(marquee.start.y, marquee.end.y);
+      const maxY = Math.max(marquee.start.y, marquee.end.y);
+      const dragged = Math.hypot(maxX - minX, maxY - minY) * viewport.zoom >= 4;
+
+      const ids = marqueeBaseIds.slice();
+      if (dragged) {
+        for (const stroke of strokes) {
+          if (stroke.type === "eraser" || ids.includes(stroke.id)) continue;
+
+          const bounds = getStrokeBounds(stroke);
+          if (!bounds) continue;
+
+          const pad = (stroke.width || 0) / 2;
+          const overlaps = bounds.maxX + pad >= minX
+            && bounds.minX - pad <= maxX
+            && bounds.maxY + pad >= minY
+            && bounds.minY - pad <= maxY;
+          if (overlaps) ids.push(stroke.id);
+        }
+      }
+
+      setSelection(ids);
+      marquee = null;
+      marqueeBaseIds = [];
+      selectionPointerId = null;
+      selectionStartWorld = null;
+      selectionOriginals = new Map();
+
+      if (dragged) {
+        showStatus(ids.length > 0 ? "已選取 " + ids.length + " 個物件，可拖曳移動。" : "框選範圍內沒有物件。");
+      }
+      updateUndoButton();
+      markLayerDirty();
+      requestRedraw();
+    }
+
     function endSelection(event) {
       if (selectionPointerId !== event.pointerId) return;
 
-      const finalStroke = selectedStrokeId ? findStrokeById(selectedStrokeId) : null;
-      if (selectionMoved && selectionOriginalStroke && finalStroke) {
+      if (marquee) {
+        finishMarquee(event);
+        return;
+      }
+
+      const ids = Array.from(selectionOriginals.keys());
+      const finalStroke = ids.length === 1 ? findStrokeById(ids[0]) : null;
+
+      if (selectionMoved && ids.length === 1 && finalStroke) {
         pushUndoAction({
           type: "move",
-          strokeId: selectedStrokeId,
-          before: selectionOriginalStroke,
+          strokeId: ids[0],
+          before: selectionOriginals.get(ids[0]),
           after: cloneStroke(finalStroke)
         });
         scheduleAutosave();
+      } else if (selectionMoved && ids.length > 1) {
+        const items = [];
+        for (const id of ids) {
+          const stroke = findStrokeById(id);
+          if (stroke) {
+            items.push({
+              strokeId: id,
+              before: selectionOriginals.get(id),
+              after: cloneStroke(stroke)
+            });
+          }
+        }
+        if (items.length > 0) {
+          pushUndoAction({
+            type: "moveMany",
+            items
+          });
+          scheduleAutosave();
+        }
       }
+
+      const shouldEdit = !selectionMoved
+        && selectionAlreadySelected
+        && finalStroke
+        && ((finalStroke.type === "sticky" && isValidStickyNote(finalStroke))
+          || (finalStroke.type === "text" && isValidTextBox(finalStroke)));
 
       selectionPointerId = null;
       selectionStartWorld = null;
-      selectionOriginalStroke = null;
+      selectionOriginals = new Map();
       selectionMoved = false;
+      selectionAlreadySelected = false;
+
+      if (shouldEdit && finalStroke) {
+        if (finalStroke.type === "sticky") {
+          startStickyEdit(finalStroke);
+        } else {
+          startTextEdit(finalStroke);
+        }
+      }
     }
 
     function pushUndoAction(action) {
@@ -1331,7 +2029,8 @@
 
     function updateUndoButton() {
       undoBtn.disabled = undoStack.length === 0;
-      deleteSelectedBtn.disabled = !selectedStrokeId;
+      redoBtn.disabled = redoStack.length === 0;
+      deleteSelectedBtn.disabled = getSelectedIds().length === 0;
     }
 
     function findStrokeById(id) {
@@ -1371,7 +2070,21 @@
         stroke.end.y += deltaY;
       }
 
+      if (Array.isArray(stroke.erasers)) {
+        for (const eraser of stroke.erasers) {
+          for (const point of eraser.points) {
+            point.x += deltaX;
+            point.y += deltaY;
+          }
+        }
+      }
+
       if (stroke.type === "sticky") {
+        stroke.x += deltaX;
+        stroke.y += deltaY;
+      }
+
+      if (stroke.type === "text") {
         stroke.x += deltaX;
         stroke.y += deltaY;
       }
@@ -1386,6 +2099,15 @@
           minY: stroke.y,
           maxX: stroke.x + stroke.noteWidth,
           maxY: stroke.y + stroke.noteHeight
+        };
+      }
+
+      if (stroke.type === "text" && isValidTextBox(stroke)) {
+        return {
+          minX: stroke.x,
+          minY: stroke.y,
+          maxX: stroke.x + stroke.width,
+          maxY: stroke.y + stroke.height
         };
       }
 
@@ -1429,6 +2151,75 @@
       };
     }
 
+    function boundsOverlap(a, aPad, b, bPad) {
+      return a.maxX + aPad >= b.minX - bPad
+        && a.minX - aPad <= b.maxX + bPad
+        && a.maxY + aPad >= b.minY - bPad
+        && a.minY - aPad <= b.maxY + bPad;
+    }
+
+    function attachEraser(target, eraser) {
+      if (!Array.isArray(target.erasers)) target.erasers = [];
+      target.erasers.push({
+        points: eraser.points.map((point) => ({ x: point.x, y: point.y })),
+        width: eraser.width || 1
+      });
+    }
+
+    function applyEraserStroke(eraser) {
+      const eraserBounds = getStrokeBounds(eraser);
+      if (!eraserBounds) return;
+
+      const items = [];
+      for (const target of strokes) {
+        if (target.type === "eraser" || target.type === "sticky") continue;
+
+        const targetBounds = getStrokeBounds(target);
+        if (!targetBounds) continue;
+        if (!boundsOverlap(eraserBounds, (eraser.width || 1) / 2, targetBounds, (target.width || 0) / 2)) continue;
+
+        const before = cloneStroke(target);
+        attachEraser(target, eraser);
+        items.push({
+          strokeId: target.id,
+          before,
+          after: cloneStroke(target)
+        });
+      }
+
+      if (items.length === 0) return;
+
+      markLayerDirty();
+      pushUndoAction({
+        type: "eraseMany",
+        items
+      });
+      scheduleAutosave();
+    }
+
+    function migrateLegacyErasers(list) {
+      const result = [];
+      for (const stroke of list) {
+        if (stroke.type !== "eraser") {
+          result.push(stroke);
+          continue;
+        }
+
+        const eraserBounds = getStrokeBounds(stroke);
+        if (!eraserBounds) continue;
+
+        for (const target of result) {
+          if (target.type === "sticky") continue;
+          const targetBounds = getStrokeBounds(target);
+          if (!targetBounds) continue;
+          if (boundsOverlap(eraserBounds, (stroke.width || 1) / 2, targetBounds, (target.width || 0) / 2)) {
+            attachEraser(target, stroke);
+          }
+        }
+      }
+      return result;
+    }
+
     function commitStroke(stroke) {
       if (!stroke) return;
 
@@ -1444,6 +2235,15 @@
         if (!isValidStickyNote(stroke)) return;
         delete stroke.start;
         delete stroke.end;
+      }
+
+      if (stroke.type === "text" && !isValidTextBox(stroke)) {
+        return;
+      }
+
+      if (stroke.type === "eraser") {
+        applyEraserStroke(stroke);
+        return;
       }
 
       strokes.push(stroke);
@@ -1463,6 +2263,8 @@
         return;
       }
 
+      multiSelectedIds = [];
+
       if (action.type === "add") {
         removeStrokeById(action.stroke.id);
         if (selectedStrokeId === action.stroke.id) {
@@ -1478,6 +2280,21 @@
       } else if (action.type === "clear") {
         strokes = action.strokes.map(cloneStroke);
         selectedStrokeId = null;
+      } else if (action.type === "moveMany") {
+        for (const item of action.items) {
+          replaceStrokeById(item.strokeId, cloneStroke(item.before));
+        }
+        setSelection(action.items.map((item) => item.strokeId));
+      } else if (action.type === "eraseMany") {
+        for (const item of action.items) {
+          replaceStrokeById(item.strokeId, cloneStroke(item.before));
+        }
+      } else if (action.type === "deleteMany") {
+        const sorted = action.items.slice().sort((a, b) => a.index - b.index);
+        for (const item of sorted) {
+          strokes.splice(clamp(item.index, 0, strokes.length), 0, cloneStroke(item.stroke));
+        }
+        setSelection(sorted.map((item) => item.stroke.id));
       }
 
       redoStack.push(action);
@@ -1487,6 +2304,12 @@
         editingStickyOriginal = null;
         stickyEditor.style.display = "none";
       }
+      if (editingTextId && !findStrokeById(editingTextId)) {
+        editingTextId = null;
+        editingTextOriginal = null;
+        textEditor.value = "";
+        textEditor.style.display = "none";
+      }
       markLayerDirty();
       requestRedraw();
       updateUndoButton();
@@ -1494,21 +2317,128 @@
       showStatus("已返回上一步。");
     }
 
+    function redoLastAction() {
+      const action = redoStack.pop();
+      if (!action) {
+        showStatus("沒有可以重做的動作。");
+        updateUndoButton();
+        return;
+      }
+
+      multiSelectedIds = [];
+
+      if (action.type === "add") {
+        strokes.push(cloneStroke(action.stroke));
+      } else if (action.type === "delete") {
+        removeStrokeById(action.stroke.id);
+        if (selectedStrokeId === action.stroke.id) {
+          selectedStrokeId = null;
+        }
+      } else if (action.type === "move" || action.type === "update") {
+        replaceStrokeById(action.strokeId, cloneStroke(action.after));
+        selectedStrokeId = action.strokeId;
+      } else if (action.type === "clear") {
+        strokes = [];
+        selectedStrokeId = null;
+      } else if (action.type === "moveMany") {
+        for (const item of action.items) {
+          replaceStrokeById(item.strokeId, cloneStroke(item.after));
+        }
+        setSelection(action.items.map((item) => item.strokeId));
+      } else if (action.type === "eraseMany") {
+        for (const item of action.items) {
+          replaceStrokeById(item.strokeId, cloneStroke(item.after));
+        }
+      } else if (action.type === "deleteMany") {
+        const removeIds = new Set(action.items.map((item) => item.stroke.id));
+        strokes = strokes.filter((stroke) => !removeIds.has(stroke.id));
+        selectedStrokeId = null;
+      }
+
+      undoStack.push(action);
+      cancelDrawing();
+      if (editingStickyId && !findStrokeById(editingStickyId)) {
+        editingStickyId = null;
+        editingStickyOriginal = null;
+        stickyEditor.value = "";
+        stickyEditor.style.display = "none";
+        editingTextId = null;
+        editingTextOriginal = null;
+        textEditor.value = "";
+        textEditor.style.display = "none";
+      }
+      if (editingTextId && !findStrokeById(editingTextId)) {
+        editingTextId = null;
+        editingTextOriginal = null;
+        textEditor.value = "";
+        textEditor.style.display = "none";
+      }
+      markLayerDirty();
+      requestRedraw();
+      updateUndoButton();
+      scheduleAutosave();
+      showStatus("已回到下一步。");
+    }
+
     function deleteSelectedStroke() {
-      if (!selectedStrokeId) {
+      const ids = getSelectedIds();
+      if (ids.length === 0) {
         showStatus("尚未選取任何物件。");
         return;
       }
 
-      const index = findStrokeIndexById(selectedStrokeId);
+      if (ids.length > 1) {
+        deleteManyStrokes(ids);
+        return;
+      }
+
+      const index = findStrokeIndexById(ids[0]);
       if (index < 0) {
         selectedStrokeId = null;
+        multiSelectedIds = [];
         updateUndoButton();
         requestRedraw();
         return;
       }
 
       deleteStrokeAtIndex(index, "已刪除所選物件。");
+    }
+
+    function deleteManyStrokes(ids) {
+      const idSet = new Set(ids);
+      const items = [];
+      strokes.forEach((stroke, index) => {
+        if (idSet.has(stroke.id)) {
+          items.push({ stroke, index });
+        }
+      });
+      if (items.length === 0) return;
+
+      if (editingStickyId && idSet.has(editingStickyId)) {
+        editingStickyId = null;
+        editingStickyOriginal = null;
+        stickyEditor.value = "";
+        stickyEditor.style.display = "none";
+      }
+      if (editingTextId && idSet.has(editingTextId)) {
+        editingTextId = null;
+        editingTextOriginal = null;
+        textEditor.value = "";
+        textEditor.style.display = "none";
+      }
+
+      strokes = strokes.filter((stroke) => !idSet.has(stroke.id));
+      pushUndoAction({
+        type: "deleteMany",
+        items
+      });
+      setSelection([]);
+      cancelDrawing();
+      markLayerDirty();
+      requestRedraw();
+      updateUndoButton();
+      scheduleAutosave();
+      showStatus("已刪除 " + items.length + " 個物件。");
     }
 
     function deleteStrokeAtIndex(index, message) {
@@ -1520,6 +2450,12 @@
         editingStickyOriginal = null;
         stickyEditor.value = "";
         stickyEditor.style.display = "none";
+      }
+      if (editingTextId === removed.id) {
+        editingTextId = null;
+        editingTextOriginal = null;
+        textEditor.value = "";
+        textEditor.style.display = "none";
       }
 
       strokes.splice(index, 1);
@@ -1560,6 +2496,12 @@
         editingStickyOriginal = null;
         stickyEditor.value = "";
         stickyEditor.style.display = "none";
+      }
+      if (editingTextId === hit.stroke.id) {
+        editingTextId = null;
+        editingTextOriginal = null;
+        textEditor.value = "";
+        textEditor.style.display = "none";
       }
       erasedStrokeIds.add(hit.stroke.id);
       pushUndoAction({
@@ -1615,6 +2557,10 @@
         return isPointInStickyNote(world, stroke);
       }
 
+      if (stroke.type === "text") {
+        return isPointInTextBox(world, stroke);
+      }
+
       return false;
     }
 
@@ -1624,6 +2570,14 @@
         && point.x <= note.x + note.noteWidth
         && point.y >= note.y
         && point.y <= note.y + note.noteHeight;
+    }
+
+    function isPointInTextBox(point, textBox) {
+      return isValidTextBox(textBox)
+        && point.x >= textBox.x
+        && point.x <= textBox.x + textBox.width
+        && point.y >= textBox.y
+        && point.y <= textBox.y + textBox.height;
     }
 
     function isPointNearPolyline(point, points, tolerance) {
@@ -1710,6 +2664,7 @@
     }
 
     function beginDrawing(event) {
+      confirmTextEdit();
       confirmStickyEdit();
       const point = getCanvasPoint(event);
       const world = screenToWorld(point.x, point.y);
@@ -1724,6 +2679,12 @@
 
       if (activeTool === "select") {
         beginSelection(event, world);
+        return;
+      }
+
+      if (activeTool === "text") {
+        drawingPointerId = null;
+        addTextBoxAt(world);
         return;
       }
 
@@ -1827,6 +2788,7 @@
       lastPanPoint = getCanvasPoint(event);
       canvas.classList.add("dragging-pan");
       cancelDrawing();
+      updateBrushCursor();
     }
 
     function continuePan(event) {
@@ -1843,6 +2805,7 @@
       panPointerId = null;
       lastPanPoint = null;
       canvas.classList.remove("dragging-pan");
+      updateBrushCursor();
     }
 
     function getPointerPair() {
@@ -1912,6 +2875,11 @@
     }
 
     canvas.addEventListener("pointerdown", (event) => {
+      cursorX = event.clientX;
+      cursorY = event.clientY;
+      isCursorInside = true;
+      updateBrushCursor();
+
       if (event.target !== canvas) return;
       event.preventDefault();
       canvas.setPointerCapture(event.pointerId);
@@ -1940,6 +2908,11 @@
     });
 
     canvas.addEventListener("pointermove", (event) => {
+      cursorX = event.clientX;
+      cursorY = event.clientY;
+      isCursorInside = true;
+      updateBrushCursor();
+
       if (!activePointers.has(event.pointerId)) return;
       event.preventDefault();
       updateActivePointer(event);
@@ -1956,6 +2929,11 @@
     });
 
     function finishPointer(event) {
+      if (event.pointerType === "touch") {
+        isCursorInside = false;
+        updateBrushCursor();
+      }
+
       if (activePointers.has(event.pointerId)) {
         activePointers.delete(event.pointerId);
       }
@@ -1978,13 +2956,24 @@
 
     canvas.addEventListener("pointerup", finishPointer);
     canvas.addEventListener("pointercancel", finishPointer);
+    canvas.addEventListener("pointerenter", (event) => {
+      cursorX = event.clientX;
+      cursorY = event.clientY;
+      isCursorInside = true;
+      updateBrushCursor();
+    });
     canvas.addEventListener("pointerleave", (event) => {
+      isCursorInside = false;
+      updateBrushCursor();
       if (event.pointerType === "mouse" && event.buttons !== 0) {
         finishPointer(event);
       }
     });
 
     canvas.addEventListener("wheel", (event) => {
+      cursorX = event.clientX;
+      cursorY = event.clientY;
+      isCursorInside = true;
       event.preventDefault();
       const point = getCanvasPoint(event);
       const zoomFactor = event.deltaY < 0 ? 1.1 : 0.9;
@@ -2007,6 +2996,7 @@
       if (swatch) {
         colorPicker.value = swatch.dataset.color;
         updateActiveSwatch();
+        updateSelectedTextStyle("color", colorPicker.value);
         scheduleAutosave();
       }
 
@@ -2014,17 +3004,32 @@
       if (stickySwatch) {
         stickyColor = stickySwatch.dataset.stickyColor;
         updateActiveStickySwatch();
+        updateSelectedStickyBackground(stickyColor);
         scheduleAutosave();
       }
     });
 
     colorPicker.addEventListener("input", () => {
       updateActiveSwatch();
+      updateSelectedTextStyle("color", colorPicker.value);
       scheduleAutosave();
     });
 
     widthSlider.addEventListener("input", () => {
       widthValue.textContent = widthSlider.value + "px";
+      updateBrushCursor();
+      scheduleAutosave();
+    });
+
+    fontFamilySelect.addEventListener("change", () => {
+      updateSelectedTextStyle("fontFamily", fontFamilySelect.value);
+      scheduleAutosave();
+    });
+
+    fontSizeSlider.addEventListener("input", () => {
+      fontSizeValue.textContent = fontSizeSlider.value + "px";
+      updateSelectedTextStyle("fontSize", Number(fontSizeSlider.value));
+      requestRedraw();
       scheduleAutosave();
     });
 
@@ -2040,13 +3045,41 @@
 
     addStickyBtn.addEventListener("click", addStickyNote);
     undoBtn.addEventListener("click", undoLastAction);
+    redoBtn.addEventListener("click", redoLastAction);
     deleteSelectedBtn.addEventListener("click", deleteSelectedStroke);
 
     stickyEditor.addEventListener("keydown", (event) => {
       if ((event.metaKey || event.ctrlKey) && event.code === "Enter") {
         event.preventDefault();
         confirmStickyEdit();
+        return;
       }
+
+      if (event.code === "Escape") {
+        event.preventDefault();
+        confirmStickyEdit();
+      }
+    });
+
+    stickyEditor.addEventListener("blur", () => {
+      confirmStickyEdit();
+    });
+
+    textEditor.addEventListener("keydown", (event) => {
+      if ((event.metaKey || event.ctrlKey) && event.code === "Enter") {
+        event.preventDefault();
+        confirmTextEdit();
+        return;
+      }
+
+      if (event.code === "Escape") {
+        event.preventDefault();
+        confirmTextEdit();
+      }
+    });
+
+    textEditor.addEventListener("blur", () => {
+      confirmTextEdit();
     });
 
     clearBtn.addEventListener("click", () => {
@@ -2063,6 +3096,10 @@
         editingStickyOriginal = null;
         stickyEditor.value = "";
         stickyEditor.style.display = "none";
+        editingTextId = null;
+        editingTextOriginal = null;
+        textEditor.value = "";
+        textEditor.style.display = "none";
         redoStack = [];
         cancelDrawing();
         markLayerDirty();
@@ -2115,9 +3152,17 @@
     });
 
     window.addEventListener("keydown", (event) => {
-      if ((event.metaKey || event.ctrlKey) && !event.shiftKey && event.code === "KeyZ" && !isEditingTextInput(event.target)) {
+      const mod = event.metaKey || event.ctrlKey;
+
+      if (mod && !event.shiftKey && event.code === "KeyZ" && !isEditingTextInput(event.target)) {
         event.preventDefault();
         undoLastAction();
+        return;
+      }
+
+      if (mod && ((event.shiftKey && event.code === "KeyZ") || event.code === "KeyY") && !isEditingTextInput(event.target)) {
+        event.preventDefault();
+        redoLastAction();
         return;
       }
 
@@ -2143,12 +3188,14 @@
 
     window.addEventListener("resize", resizeCanvas);
     window.addEventListener("pagehide", () => {
+      confirmTextEdit();
       confirmStickyEdit();
       saveBoardToLocalStorage();
     });
 
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "hidden") {
+        confirmTextEdit();
         confirmStickyEdit();
         saveBoardToLocalStorage();
       }
@@ -2189,7 +3236,7 @@
         return;
       }
 
-      strokes = data.strokes.filter(isValidStroke).map(cloneStroke);
+      strokes = migrateLegacyErasers(data.strokes.filter(isValidStroke).map(cloneStroke));
       undoStack = [];
       redoStack = [];
       selectedStrokeId = null;
@@ -2197,6 +3244,10 @@
       editingStickyOriginal = null;
       stickyEditor.value = "";
       stickyEditor.style.display = "none";
+      editingTextId = null;
+      editingTextOriginal = null;
+      textEditor.value = "";
+      textEditor.style.display = "none";
       updateUndoButton();
 
       if (data.viewport && Number.isFinite(data.viewport.x) && Number.isFinite(data.viewport.y) && Number.isFinite(data.viewport.zoom)) {
@@ -2230,6 +3281,10 @@
         return isValidStickyNote(stroke);
       }
 
+      if (stroke.type === "text") {
+        return isValidTextBox(stroke);
+      }
+
       return false;
     }
 
@@ -2242,6 +3297,18 @@
         && note.noteWidth > 0
         && note.noteHeight > 0
         && (typeof note.color === "string" || typeof note.color === "undefined");
+    }
+
+    function isValidTextBox(textBox) {
+      return textBox
+        && Number.isFinite(textBox.x)
+        && Number.isFinite(textBox.y)
+        && Number.isFinite(textBox.width)
+        && Number.isFinite(textBox.height)
+        && textBox.width > 0
+        && textBox.height > 0
+        && (typeof textBox.text === "string" || typeof textBox.text === "undefined")
+        && (typeof textBox.color === "string" || typeof textBox.color === "undefined");
     }
 
     function cloneStroke(stroke) {
